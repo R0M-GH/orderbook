@@ -1,7 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <list>
+#include <memory>
+#include <stdexcept>
 #include <vector>
+#include <format>
 
 enum class OrderType {
     GoodTillCancel,
@@ -25,28 +29,28 @@ struct LevelInfo {
 using LevelInfos = std::vector<LevelInfo>;
 
 class OrderbookLevelInfos {
-    public:
+public:
     OrderbookLevelInfos(const LevelInfos& bids, const LevelInfos& asks)
-    : bids_{ bids }
-    , asks_{ asks }
+        : bids_{ bids }
+        , asks_{ asks }
     { }
 
     const LevelInfos& GetBids() const { return bids_; }
     const LevelInfos& GetAsks() const { return asks_; }
 
-    private:
+private:
     LevelInfos bids_, asks_;
 };
 
 class Order {
-    public:
+public:
     Order(OrderType orderType, OrderId orderId, Side side, Price price, Quantity quantity)
-    : orderType_{ orderType }
-    , orderId_{orderId }
-    , side_{ side }
-    , price_{ price }
-    , initialQuantity_{ quantity }
-    , remainingQuantity_{ quantity }
+        : orderType_{ orderType }
+        , orderId_{orderId }
+        , side_{ side }
+        , price_{ price }
+        , initialQuantity_{ quantity }
+        , remainingQuantity_{ quantity }
     { }
 
     OrderType GetOrderType() const { return orderType_; }
@@ -55,14 +59,47 @@ class Order {
     Price GetPrice() const { return price_; }
     Quantity GetInitialQuantity() const { return initialQuantity_; }
     Quantity GetRemainingQuantity() const { return remainingQuantity_; }
-    Quantity GetFilledQuantity() const { return initialQuantity_ - remainingQuantity_; }
+    Quantity GetFilledQuantity() const { return GetInitialQuantity() - GetRemainingQuantity(); }
+    
+    void Fill(Quantity quantity) {
+        if (quantity > GetRemainingQuantity()) {
+            throw std::logic_error(std::format("Order #{} can't be filled for more than its remaining quantity", GetOrderId()));
+        }
+        remainingQuantity_ -= quantity;
+    }
 
-
-
-    private:
+private:
     OrderType orderType_;
     OrderId orderId_;
     Side side_;
     Price price_;
     Quantity initialQuantity_, remainingQuantity_;
+};
+
+using OrderPointer = std::shared_ptr<Order>;
+using OrderPointers = std::list<OrderPointer>;
+
+class OrderModify {
+public:
+    OrderModify(OrderId orderId, Side side, Price price, Quantity quantity)
+        : orderId_{ orderId }
+        , side_{ side }
+        , price_{ price }
+        , quantity_{ quantity }
+    { }
+    
+    OrderId GetOrderId() const { return orderId_; }
+    Side GetSide() const { return side_; }
+    Price GetPrice() const { return price_; }
+    Quantity GetQuantity() const { return quantity_; }
+
+    OrderPointer ToOrderPointer(OrderType type) const {
+        return std::make_shared<Order>(type, GetOrderId(), GetSide(), GetPrice(), GetQuantity());
+    }
+
+private:
+    OrderId orderId_;
+    Side side_;
+    Price price_;
+    Quantity quantity_;
 };
